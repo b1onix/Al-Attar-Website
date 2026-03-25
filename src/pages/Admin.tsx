@@ -1,6 +1,6 @@
 import { useState, useEffect, useReducer } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Package, ShoppingBag, CheckCircle, Clock, Truck, Plus, Edit2, Trash2, X, Image as ImageIcon, LayoutDashboard, LogOut, ChevronRight, Settings, Lock } from 'lucide-react';
+import { Package, ShoppingBag, CheckCircle, Clock, Truck, Plus, Edit2, Trash2, X, Image as ImageIcon, LayoutDashboard, LogOut, ChevronRight, Settings, Lock, FileText, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 
@@ -51,6 +51,8 @@ export default function Admin() {
   const [state, dispatch] = useReducer((state: any, action: any) => ({ ...state, ...action }), {
     orders: [],
     products: [],
+    heroSlides: [],
+    pageContent: {},
     loading: true,
     activeTab: 'orders',
     isModalOpen: false,
@@ -71,7 +73,7 @@ export default function Admin() {
     }
   });
 
-  const { orders, products, loading, activeTab, isModalOpen, editingProduct, isSaving, uploadingImage, formData } = state;
+  const { orders, products, heroSlides, pageContent, loading, activeTab, isModalOpen, editingProduct, isSaving, uploadingImage, formData } = state;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -119,8 +121,35 @@ export default function Admin() {
 
   const fetchData = async () => {
     dispatch({ loading: true });
-    await Promise.all([fetchOrders(), fetchProducts()]);
+    await Promise.all([fetchOrders(), fetchProducts(), fetchLandingContent()]);
     dispatch({ loading: false });
+  };
+
+  const fetchLandingContent = async () => {
+    try {
+      const [slidesRes, contentRes] = await Promise.all([
+        supabase.from('hero_slides').select('*').order('display_order', { ascending: true }),
+        supabase.from('page_content').select('*')
+      ]);
+
+      if (slidesRes.error) {
+        console.error('Error fetching slides:', slidesRes.error);
+      } else {
+        dispatch({ heroSlides: slidesRes.data || [] });
+      }
+
+      if (contentRes.error) {
+        console.error('Error fetching page content:', contentRes.error);
+      } else {
+        const contentMap: Record<string, any> = {};
+        contentRes.data?.forEach(item => {
+          contentMap[item.id] = item.content;
+        });
+        dispatch({ pageContent: contentMap });
+      }
+    } catch (err) {
+      console.error('Error in fetchLandingContent:', err);
+    }
   };
 
   const fetchOrders = async () => {
@@ -433,6 +462,48 @@ export default function Admin() {
               <span className="text-xs uppercase tracking-widest">Proizvodi</span>
             </div>
           </button>
+
+          <button
+            onClick={() => dispatch({ activeTab: 'landing' })}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 ${
+              activeTab === 'landing' 
+                ? 'bg-accent/10 text-accent border border-accent/20' 
+                : 'text-white/60 hover:bg-white/5 hover:text-white border border-transparent'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <FileText size={18} />
+              <span className="text-xs uppercase tracking-widest">Početna</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => dispatch({ activeTab: 'about' })}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 ${
+              activeTab === 'about' 
+                ? 'bg-accent/10 text-accent border border-accent/20' 
+                : 'text-white/60 hover:bg-white/5 hover:text-white border border-transparent'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <FileText size={18} />
+              <span className="text-xs uppercase tracking-widest">O Nama</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => dispatch({ activeTab: 'contact' })}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 ${
+              activeTab === 'contact' 
+                ? 'bg-accent/10 text-accent border border-accent/20' 
+                : 'text-white/60 hover:bg-white/5 hover:text-white border border-transparent'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <FileText size={18} />
+              <span className="text-xs uppercase tracking-widest">Kontakt</span>
+            </div>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-white/5 space-y-2">
@@ -473,10 +544,9 @@ export default function Admin() {
           )}
         </header>
 
-        <div className="p-10">
-
-        {activeTab === 'orders' && (
-          <div className="space-y-6">
+        <div className="p-10 pb-32">
+          {activeTab === 'orders' && (
+            <div className="space-y-6">
             {orders.length === 0 ? (
               <div className="text-center py-32 border border-white/5 bg-white/[0.02] rounded-2xl">
                 <Package size={48} className="mx-auto mb-4 text-white/20" />
@@ -825,9 +895,1442 @@ export default function Admin() {
               </div>
             </motion.div>
           </div>
-        )}
+          )}
+
+          {activeTab === 'landing' && (
+            <LandingPageManager 
+              heroSlides={heroSlides} 
+              pageContent={pageContent} 
+              onUpdate={fetchLandingContent} 
+            />
+          )}
+
+          {activeTab === 'about' && (
+            <AboutManager 
+              content={pageContent} 
+              onUpdate={fetchLandingContent} 
+            />
+          )}
+
+          {activeTab === 'contact' && (
+            <ContactManager 
+              content={pageContent} 
+              onUpdate={fetchLandingContent} 
+            />
+          )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function LandingPageManager({ heroSlides, pageContent, onUpdate }: { heroSlides: any[], pageContent: any, onUpdate: () => void }) {
+  const [activeSection, setActiveSection] = useState('hero');
+  const [saving, setSaving] = useState(false);
+
+  const sections = [
+    { id: 'hero', label: 'Hero Slider' },
+    { id: 'narrative', label: 'O nama (Header)' },
+    { id: 'atelier', label: 'O nama (Kartice)' },
+    { id: 'journey', label: 'Scent Journey' },
+    { id: 'carousel', label: 'Istaknuti Parfemi (Carousel)' },
+    { id: 'footer', label: 'Footer (Podnožje)' },
+  ];
+
+  return (
+    <div className="space-y-8">
+      {/* Section Navigation */}
+      <div className="flex gap-4 border-b border-white/10 pb-4">
+        {sections.map(section => (
+          <button
+            key={section.id}
+            onClick={() => setActiveSection(section.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeSection === section.id 
+                ? 'bg-accent text-black' 
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === 'hero' && (
+        <HeroSliderManager slides={heroSlides} onUpdate={onUpdate} saving={saving} setSaving={setSaving} />
+      )}
+
+      {activeSection === 'narrative' && (
+        <NarrativeManager content={pageContent} onUpdate={onUpdate} saving={saving} setSaving={setSaving} />
+      )}
+
+      {activeSection === 'atelier' && (
+        <AtelierManager content={pageContent} onUpdate={onUpdate} saving={saving} setSaving={setSaving} />
+      )}
+
+      {activeSection === 'journey' && (
+        <ScentJourneyManager content={pageContent} onUpdate={onUpdate} saving={saving} setSaving={setSaving} />
+      )}
+
+      {activeSection === 'carousel' && (
+        <CarouselManager content={pageContent} onUpdate={onUpdate} saving={saving} setSaving={setSaving} />
+      )}
+
+      {activeSection === 'footer' && (
+        <FooterManager content={pageContent} onUpdate={onUpdate} saving={saving} setSaving={setSaving} />
+      )}
+    </div>
+  );
+}
+
+function HeroSliderManager({ slides, onUpdate, saving, setSaving }: any) {
+  // Temporary state for editing before save
+  const [editedSlides, setEditedSlides] = useState<any[]>([]);
+  const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (slides && slides.length > 0) {
+      setEditedSlides(JSON.parse(JSON.stringify(slides)));
+    }
+  }, [slides]);
+
+  const handleSlideChange = (id: string, field: string, value: any) => {
+    setEditedSlides(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
+
+  const handleNotesChange = (id: string, notesStr: string) => {
+    const notesArray = notesStr.split(',').map(n => n.trim()).filter(Boolean);
+    handleSlideChange(id, 'notes', notesArray);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, slideId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImageId(slideId);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `landing/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images') // Reusing same bucket for simplicity
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(filePath);
+      handleSlideChange(slideId, 'image_url', data.publicUrl);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Greška pri uploadu slike.');
+    } finally {
+      setUploadingImageId(null);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      for (const slide of editedSlides) {
+        const { error } = await supabase
+          .from('hero_slides')
+          .update({
+            eyebrow: slide.eyebrow,
+            title: slide.title,
+            description: slide.description,
+            image_url: slide.image_url,
+            stat_label: slide.stat_label,
+            stat_value: slide.stat_value,
+            card_title: slide.card_title,
+            card_copy: slide.card_copy,
+            notes: slide.notes
+          })
+          .eq('id', slide.id);
+        
+        if (error) throw error;
+      }
+      alert('Hero sekcija uspješno sačuvana!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving hero slides:', error);
+      alert('Greška pri spašavanju hero sekcije.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editedSlides.length) return <div className="text-white/50">Nema hero slajdova u bazi. Pokrenite SQL skriptu.</div>;
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Hero Slider (Početna sekcija)</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-3">
+        {editedSlides.map((slide, index) => (
+          <div key={slide.id} className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+            <h3 className="text-accent font-bold mb-4">Slajd {index + 1}</h3>
+            
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Slika pozadine</label>
+              <div className="relative aspect-[4/5] bg-black/40 rounded-xl overflow-hidden group border border-white/10">
+                {slide.image_url ? (
+                  <img src={slide.image_url} alt="Hero" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <ImageIcon className="text-white/20" size={32} />
+                  </div>
+                )}
+                
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2">
+                    <Upload size={14} />
+                    {uploadingImageId === slide.id ? 'Upload...' : 'Promijeni'}
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, slide.id)}
+                      disabled={uploadingImageId === slide.id}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={slide.eyebrow}
+                onChange={e => handleSlideChange(slide.id, 'eyebrow', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-accent"
+                placeholder="Eyebrow text"
+              />
+              <textarea
+                value={slide.title}
+                onChange={e => handleSlideChange(slide.id, 'title', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white h-20"
+                placeholder="Glavni Naslov"
+              />
+              <textarea
+                value={slide.description}
+                onChange={e => handleSlideChange(slide.id, 'description', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 h-24"
+                placeholder="Opis ispod naslova"
+              />
+              
+              <div className="grid grid-cols-2 gap-2 pt-4 border-t border-white/10">
+                <input
+                  type="text"
+                  value={slide.stat_label}
+                  onChange={e => handleSlideChange(slide.id, 'stat_label', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/50"
+                  placeholder="Stat Label"
+                />
+                <input
+                  type="text"
+                  value={slide.stat_value}
+                  onChange={e => handleSlideChange(slide.id, 'stat_value', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white"
+                  placeholder="Stat Value"
+                />
+              </div>
+
+              <div className="space-y-2 pt-4 border-t border-white/10">
+                <label className="text-[10px] uppercase tracking-widest text-white/50">Info Kartica (Desktop)</label>
+                <input
+                  type="text"
+                  value={slide.card_title}
+                  onChange={e => handleSlideChange(slide.id, 'card_title', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                  placeholder="Naslov kartice"
+                />
+                <textarea
+                  value={slide.card_copy}
+                  onChange={e => handleSlideChange(slide.id, 'card_copy', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/70 h-16"
+                  placeholder="Tekst kartice"
+                />
+                <input
+                  type="text"
+                  value={slide.notes?.join(', ')}
+                  onChange={e => handleNotesChange(slide.id, e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-accent"
+                  placeholder="Note (odvojene zarezom)"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContactManager({ content, onUpdate }: { content: any, onUpdate: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [editedContent, setEditedContent] = useState<any>({
+    eyebrow: 'Korisnička Podrška',
+    title_1: 'Stupimo u',
+    title_2: 'Kontakt.',
+    description: 'Bilo da imate pitanje o našim mirisima, trebate pomoć pri odabiru savršenog parfema ili želite razgovarati o saradnji, tu smo za vas.',
+    address_label: 'Atelje & Sjedište',
+    address: 'Tuzla, Bosna i Hercegovina',
+    email_label: 'Email',
+    email: 'hello@al-attar.ba',
+    phone_label: 'Telefon',
+    phone: '+387 60 000 000',
+    form_title: 'Pošaljite nam poruku',
+    instagram_handle: '@al.attar',
+    instagram_url: 'https://instagram.com'
+  });
+
+  useEffect(() => {
+    if (content?.contact_content) {
+      setEditedContent(content.contact_content);
+    }
+  }, [content]);
+
+  const handleChange = (field: string, value: string) => {
+    setEditedContent((prev: any) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('page_content')
+        .upsert({ id: 'contact_content', content: editedContent });
+      
+      if (error) throw error;
+      alert('Kontakt stranica uspješno sačuvana!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving contact content:', error);
+      alert('Greška pri spašavanju Kontakt stranice.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Upravljanje sadržajem: Kontakt</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        {/* Header Section */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <h3 className="text-accent font-bold mb-4">Naslovni dio</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Mali naslov iznad (Eyebrow)</label>
+            <input
+              type="text"
+              value={editedContent.eyebrow || ''}
+              onChange={e => handleChange('eyebrow', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni Naslov (Prvi red)</label>
+            <input
+              type="text"
+              value={editedContent.title_1 || ''}
+              onChange={e => handleChange('title_1', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni Naslov (Drugi red)</label>
+            <input
+              type="text"
+              value={editedContent.title_2 || ''}
+              onChange={e => handleChange('title_2', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Opisni tekst</label>
+            <textarea
+              value={editedContent.description || ''}
+              onChange={e => handleChange('description', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+        </div>
+
+        {/* Contact Info */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <h3 className="text-accent font-bold mb-4">Kontakt Informacije</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov Adrese</label>
+            <input
+              type="text"
+              value={editedContent.address_label || ''}
+              onChange={e => handleChange('address_label', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Adresa</label>
+            <input
+              type="text"
+              value={editedContent.address || ''}
+              onChange={e => handleChange('address', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov Emaila</label>
+            <input
+              type="text"
+              value={editedContent.email_label || ''}
+              onChange={e => handleChange('email_label', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Email</label>
+            <input
+              type="email"
+              value={editedContent.email || ''}
+              onChange={e => handleChange('email', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov Telefona</label>
+            <input
+              type="text"
+              value={editedContent.phone_label || ''}
+              onChange={e => handleChange('phone_label', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Telefon</label>
+            <input
+              type="text"
+              value={editedContent.phone || ''}
+              onChange={e => handleChange('phone', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Form Settings */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 lg:col-span-2 max-w-2xl">
+          <h3 className="text-accent font-bold mb-4">Kontakt Forma i Mreže</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov Forme</label>
+            <input
+              type="text"
+              value={editedContent.form_title || ''}
+              onChange={e => handleChange('form_title', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Instagram Prikazno Ime</label>
+              <input
+                type="text"
+                value={editedContent.instagram_handle || ''}
+                onChange={e => handleChange('instagram_handle', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Instagram Link (URL)</label>
+              <input
+                type="url"
+                value={editedContent.instagram_url || ''}
+                onChange={e => handleChange('instagram_url', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function AboutManager({ content, onUpdate }: { content: any, onUpdate: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null);
+  const [editedContent, setEditedContent] = useState<any>({
+    hero: {
+      eyebrow: 'Naša Priča',
+      title_1: 'Umjetnost',
+      title_2: 'Parfimerije',
+      description: 'U srcu Tuzle, gdje se susreću istok i zapad, rođena je ideja o parfimeriji koja ne prati prolazne trendove, već stvara trajne uspomene kroz najfinije esencije.'
+    },
+    story_1: {
+      image_url: 'https://picsum.photos/seed/atelier-perfume/1000/1200?grayscale',
+      label: '01 / Filozofija',
+      title: 'Spori proces, apsolutna posvećenost detaljima.',
+      text_1: 'Svaki Al-Attar miris je rezultat stotina sati pažljivog miješanja, maceracije i sazrijevanja. Ne vjerujemo u masovnu produkciju. Vjerujemo u strpljenje potrebno da bi sirovine razvile svoj puni potencijal.',
+      text_2: 'Koristimo isključivo najfinije sirovine iz cijelog svijeta - od rijetkog ouda iz Kambodže, senzualnog mošusa, do najčišće ruže iz Taifa. Naš proces duboko poštuje viševjekovnu tradiciju orijentalne parfumerije.'
+    },
+    story_2: {
+      image_url: 'https://picsum.photos/seed/minimal-bottle/1000/1500?grayscale',
+      label: '02 / Estetika',
+      title: 'Dizajn koji prepušta glavnu riječ mirisu.',
+      text_1: 'Vjerujemo u snagu apsolutnog minimalizma. Naše bočice su lišene suvišnih ukrasa, teške i hladne na dodir, dizajnirane kao trezori koji čuvaju dragocjenu esenciju unutar njih.',
+      text_2: 'Fokus je isključivo na mirisu - nevidljivom, ali najmoćnijem dodatku koji nosite. Kad zatvorite oči, jedino što ostaje je karakter.'
+    },
+    location: {
+      label: 'Sjedište',
+      title: 'Tuzla, Bosna i Hercegovina',
+      description: 'Naš atelje se nalazi u srcu Tuzle, gdje pažljivo dizajniramo, miješamo i pakujemo svaki miris prije nego što krene na put do vas.'
+    }
+  });
+
+  useEffect(() => {
+    if (content?.about_content) {
+      setEditedContent(content.about_content);
+    }
+  }, [content]);
+
+  const handleChange = (section: string, field: string, value: string) => {
+    setEditedContent((prev: any) => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, section: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(section);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `about/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(filePath);
+      handleChange(section, 'image_url', data.publicUrl);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Greška pri uploadu slike.');
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('page_content')
+        .upsert({ id: 'about_content', content: editedContent });
+      
+      if (error) throw error;
+      alert('O nama stranica uspješno sačuvana!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving about content:', error);
+      alert('Greška pri spašavanju O nama stranice.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Upravljanje sadržajem: O Nama</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        {/* Hero Section */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <h3 className="text-accent font-bold mb-4">Hero Sekcija (Vrh stranice)</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Mali naslov iznad (Eyebrow)</label>
+            <input
+              type="text"
+              value={editedContent.hero?.eyebrow || ''}
+              onChange={e => handleChange('hero', 'eyebrow', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni Naslov (Prva Riječ)</label>
+            <input
+              type="text"
+              value={editedContent.hero?.title_1 || ''}
+              onChange={e => handleChange('hero', 'title_1', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni Naslov (Druga Riječ)</label>
+            <input
+              type="text"
+              value={editedContent.hero?.title_2 || ''}
+              onChange={e => handleChange('hero', 'title_2', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Opisni tekst</label>
+            <textarea
+              value={editedContent.hero?.description || ''}
+              onChange={e => handleChange('hero', 'description', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+        </div>
+
+        {/* Location Section */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <h3 className="text-accent font-bold mb-4">Lokacija (Dno stranice)</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Oznaka (Label)</label>
+            <input
+              type="text"
+              value={editedContent.location?.label || ''}
+              onChange={e => handleChange('location', 'label', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov lokacije</label>
+            <input
+              type="text"
+              value={editedContent.location?.title || ''}
+              onChange={e => handleChange('location', 'title', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Opis lokacije</label>
+            <textarea
+              value={editedContent.location?.description || ''}
+              onChange={e => handleChange('location', 'description', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+        </div>
+
+        {/* Story 1 Section */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <h3 className="text-accent font-bold mb-4">Sekcija: Filozofija</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Slika</label>
+            <div className="relative aspect-[4/5] bg-black/40 rounded-xl overflow-hidden group border border-white/10 max-h-48">
+              {editedContent.story_1?.image_url ? (
+                <img src={editedContent.story_1.image_url} alt="Story 1" className="w-full h-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <ImageIcon className="text-white/20" size={32} />
+                </div>
+              )}
+              
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2">
+                  <Upload size={14} />
+                  {uploadingImage === 'story_1' ? 'Upload...' : 'Promijeni'}
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'story_1')}
+                    disabled={uploadingImage === 'story_1'}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Oznaka</label>
+            <input
+              type="text"
+              value={editedContent.story_1?.label || ''}
+              onChange={e => handleChange('story_1', 'label', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov</label>
+            <textarea
+              value={editedContent.story_1?.title || ''}
+              onChange={e => handleChange('story_1', 'title', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none h-16"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Paragraf 1</label>
+            <textarea
+              value={editedContent.story_1?.text_1 || ''}
+              onChange={e => handleChange('story_1', 'text_1', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-xs text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Paragraf 2</label>
+            <textarea
+              value={editedContent.story_1?.text_2 || ''}
+              onChange={e => handleChange('story_1', 'text_2', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-xs text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+        </div>
+
+        {/* Story 2 Section */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+          <h3 className="text-accent font-bold mb-4">Sekcija: Estetika</h3>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Slika</label>
+            <div className="relative aspect-[4/5] bg-black/40 rounded-xl overflow-hidden group border border-white/10 max-h-48">
+              {editedContent.story_2?.image_url ? (
+                <img src={editedContent.story_2.image_url} alt="Story 2" className="w-full h-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <ImageIcon className="text-white/20" size={32} />
+                </div>
+              )}
+              
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2">
+                  <Upload size={14} />
+                  {uploadingImage === 'story_2' ? 'Upload...' : 'Promijeni'}
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'story_2')}
+                    disabled={uploadingImage === 'story_2'}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Oznaka</label>
+            <input
+              type="text"
+              value={editedContent.story_2?.label || ''}
+              onChange={e => handleChange('story_2', 'label', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov</label>
+            <textarea
+              value={editedContent.story_2?.title || ''}
+              onChange={e => handleChange('story_2', 'title', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none h-16"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Paragraf 1</label>
+            <textarea
+              value={editedContent.story_2?.text_1 || ''}
+              onChange={e => handleChange('story_2', 'text_1', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-xs text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Paragraf 2</label>
+            <textarea
+              value={editedContent.story_2?.text_2 || ''}
+              onChange={e => handleChange('story_2', 'text_2', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-xs text-white/70 focus:border-accent outline-none h-24"
+            />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function FooterManager({ content, onUpdate, saving, setSaving }: any) {
+  const [editedFooter, setEditedFooter] = useState<any>(content?.footer_content || {});
+
+  useEffect(() => {
+    if (content?.footer_content) {
+      setEditedFooter(content.footer_content);
+    } else {
+      setEditedFooter({
+        brand_description: 'Luksuzni mirisi inspirisani tradicijom i oblikovani za moderno doba.',
+        contact_email: 'info@al-attar.com',
+        contact_phone: '+387 61 234 567',
+        address: 'Sarajevo, Bosna i Hercegovina',
+        instagram_url: 'https://instagram.com',
+        facebook_url: 'https://facebook.com',
+        tiktok_url: 'https://tiktok.com',
+        copyright_text: '© 2024 Al-Attar. Sva prava zadržana.'
+      });
+    }
+  }, [content]);
+
+  const handleChange = (field: string, value: string) => {
+    setEditedFooter({ ...editedFooter, [field]: value });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('page_content')
+        .upsert({ id: 'footer_content', content: editedFooter });
+      
+      if (error) throw error;
+      alert('Footer uspješno sačuvan!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving footer:', error);
+      alert('Greška pri spašavanju footera.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-2xl">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Footer (Podnožje stranice)</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
+        
+        <div className="space-y-4 border-b border-white/10 pb-6">
+          <h3 className="text-accent font-bold">Brend i Opis</h3>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Kratki opis ispod loga</label>
+            <textarea
+              value={editedFooter.brand_description || ''}
+              onChange={e => handleChange('brand_description', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white/70 focus:border-accent outline-none h-20"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-4 border-b border-white/10 pb-6">
+          <h3 className="text-accent font-bold">Kontakt Informacije</h3>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Email Adresa</label>
+              <input
+                type="email"
+                value={editedFooter.contact_email || ''}
+                onChange={e => handleChange('contact_email', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Broj Telefona</label>
+              <input
+                type="text"
+                value={editedFooter.contact_phone || ''}
+                onChange={e => handleChange('contact_phone', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Fizička Adresa / Lokacija</label>
+              <input
+                type="text"
+                value={editedFooter.address || ''}
+                onChange={e => handleChange('address', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 border-b border-white/10 pb-6">
+          <h3 className="text-accent font-bold">Društvene Mreže (Linkovi)</h3>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Instagram URL</label>
+              <input
+                type="url"
+                value={editedFooter.instagram_url || ''}
+                onChange={e => handleChange('instagram_url', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Facebook URL</label>
+              <input
+                type="url"
+                value={editedFooter.facebook_url || ''}
+                onChange={e => handleChange('facebook_url', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">TikTok URL</label>
+              <input
+                type="url"
+                value={editedFooter.tiktok_url || ''}
+                onChange={e => handleChange('tiktok_url', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-accent font-bold">Autorska Prava</h3>
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-white/50">Copyright Tekst</label>
+            <input
+              type="text"
+              value={editedFooter.copyright_text || ''}
+              onChange={e => handleChange('copyright_text', e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:border-accent outline-none"
+            />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function NarrativeManager({ content, onUpdate, saving, setSaving }: any) {
+  const [editedHeader, setEditedHeader] = useState<any>(content?.narrative_header || {});
+
+  useEffect(() => {
+    if (content?.narrative_header) {
+      setEditedHeader(content.narrative_header);
+    }
+  }, [content]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('page_content')
+        .upsert({ id: 'narrative_header', content: editedHeader });
+      
+      if (error) throw error;
+      alert('Narrative sekcija uspješno sačuvana!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving narrative:', error);
+      alert('Greška pri spašavanju narrative sekcije.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-2xl">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Narrative Sekcija (O nama)</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-white/50">Mali naslov iznad (Eyebrow)</label>
+          <input
+            type="text"
+            value={editedHeader.eyebrow || ''}
+            onChange={e => setEditedHeader({...editedHeader, eyebrow: e.target.value})}
+            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni naslov</label>
+          <textarea
+            value={editedHeader.title || ''}
+            onChange={e => setEditedHeader({...editedHeader, title: e.target.value})}
+            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-lg text-white focus:border-accent outline-none h-24"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-white/50">Opisni tekst</label>
+          <textarea
+            value={editedHeader.description || ''}
+            onChange={e => setEditedHeader({...editedHeader, description: e.target.value})}
+            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white/70 focus:border-accent outline-none h-32"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AtelierManager({ content, onUpdate, saving, setSaving }: any) {
+  const [editedCards, setEditedCards] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (content?.atelier_details) {
+      setEditedCards(content.atelier_details);
+    } else {
+      // Default fallback structure
+      setEditedCards([
+        { label: '', title: '', description: '' },
+        { label: '', title: '', description: '' },
+        { label: '', title: '', description: '' }
+      ]);
+    }
+  }, [content]);
+
+  const handleCardChange = (index: number, field: string, value: string) => {
+    const newCards = [...editedCards];
+    newCards[index] = { ...newCards[index], [field]: value };
+    setEditedCards(newCards);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('page_content')
+        .upsert({ id: 'atelier_details', content: editedCards });
+      
+      if (error) throw error;
+      alert('Kartice uspješno sačuvane!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving atelier cards:', error);
+      alert('Greška pri spašavanju kartica.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">O nama (Informacijske kartice)</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        {editedCards.map((card, index) => (
+          <div key={index} className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+            <h3 className="text-accent font-bold mb-4">Kartica {index + 1}</h3>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Mali naslov (Label)</label>
+              <input
+                type="text"
+                value={card.label || ''}
+                onChange={e => handleCardChange(index, 'label', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-accent focus:border-accent outline-none"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni naslov</label>
+              <textarea
+                value={card.title || ''}
+                onChange={e => handleCardChange(index, 'title', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:border-accent outline-none h-20"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Opis</label>
+              <textarea
+                value={card.description || ''}
+                onChange={e => handleCardChange(index, 'description', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-white/70 focus:border-accent outline-none h-28"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScentJourneyManager({ content, onUpdate, saving, setSaving }: any) {
+  const [editedJourney, setEditedJourney] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (content?.scent_journey) {
+      setEditedJourney(content.scent_journey);
+    } else {
+      setEditedJourney([
+        { phase: 'Otvaranje', notes: '', description: '' },
+        { phase: 'Srce', notes: '', description: '' },
+        { phase: 'Trag', notes: '', description: '' }
+      ]);
+    }
+  }, [content]);
+
+  const handleJourneyChange = (index: number, field: string, value: string) => {
+    const newJourney = [...editedJourney];
+    newJourney[index] = { ...newJourney[index], [field]: value };
+    setEditedJourney(newJourney);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('page_content')
+        .upsert({ id: 'scent_journey', content: editedJourney });
+      
+      if (error) throw error;
+      alert('Scent Journey uspješno sačuvan!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving journey:', error);
+      alert('Greška pri spašavanju.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Scent Journey (Piramida mirisa)</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        {editedJourney.map((step, index) => (
+          <div key={index} className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+            <h3 className="text-accent font-bold mb-4">Sloj {index + 1} ({step.phase})</h3>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Ime faze</label>
+              <input
+                type="text"
+                value={step.phase || ''}
+                onChange={e => handleJourneyChange(index, 'phase', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-accent focus:border-accent outline-none"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Note (Veliki naslov)</label>
+              <textarea
+                value={step.notes || ''}
+                onChange={e => handleJourneyChange(index, 'notes', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-lg font-display text-white focus:border-accent outline-none h-24"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Opis</label>
+              <textarea
+                value={step.description || ''}
+                onChange={e => handleJourneyChange(index, 'description', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-white/70 focus:border-accent outline-none h-28"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CarouselManager({ content, onUpdate, saving, setSaving }: any) {
+  const [editedHeader, setEditedHeader] = useState<any>(content?.carousel_header || {});
+  const [editedCards, setEditedCards] = useState<any[]>([]);
+  const [uploadingImageId, setUploadingImageId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (content?.carousel_header) {
+      setEditedHeader(content.carousel_header);
+    } else {
+      setEditedHeader({
+        eyebrow: 'Signature kolekcija',
+        title: 'Mirisi koji definišu karakter i ostavljaju neizbrisiv trag.',
+        description: 'Svaka kreacija je pažljivo balansirana da pruži jedinstveno iskustvo, od prvog dodira sa kožom do dugotrajnog traga.'
+      });
+    }
+
+    if (content?.carousel_cards) {
+      setEditedCards(content.carousel_cards);
+    } else {
+      setEditedCards([
+        { title: 'Crni Oud', subtitle: 'Večernji potpis', description: 'Dubok, dimljen i gotovo filmski. Kompozicija koja ostavlja trag.', notes: 'Oud, Tamjan, Koža', accent: 'Atelier izbor', url: 'https://picsum.photos/seed/oud/1200/1400?grayscale', link: '/product/1' },
+        { title: 'Bijeli Mošus', subtitle: 'Čistoća sa karakterom', description: 'Minimalistički i svilenkast miris za svakodnevni luksuz.', notes: 'Mošus, Ruža', accent: 'Tihi potpis', url: 'https://picsum.photos/seed/musk/1000/1200?grayscale', link: '/product/2' },
+        { title: 'Ponoćna Ruža', subtitle: 'Baršunasta dramatičnost', description: 'Cvjetna kompozicija sa tamnom dubinom koja ostaje elegantna.', notes: 'Damask Ruža, Pačuli', accent: 'Noćna edicija', url: 'https://picsum.photos/seed/rose/1000/1200?grayscale', link: '/product/3' }
+      ]);
+    }
+  }, [content]);
+
+  const handleCardChange = (index: number, field: string, value: string) => {
+    const newCards = [...editedCards];
+    newCards[index] = { ...newCards[index], [field]: value };
+    setEditedCards(newCards);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImageId(index);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `landing/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(filePath);
+      handleCardChange(index, 'url', data.publicUrl);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Greška pri uploadu slike.');
+    } finally {
+      setUploadingImageId(null);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error: headerError } = await supabase
+        .from('page_content')
+        .upsert({ id: 'carousel_header', content: editedHeader });
+      
+      if (headerError) throw headerError;
+
+      const { error: cardsError } = await supabase
+        .from('page_content')
+        .upsert({ id: 'carousel_cards', content: editedCards });
+
+      if (cardsError) throw cardsError;
+
+      alert('Carousel sekcija uspješno sačuvana!');
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving carousel:', error);
+      alert('Greška pri spašavanju carousel sekcije.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-display text-white">Istaknuti Parfemi (Horizontalni Slider)</h2>
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-accent text-black px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-xs disabled:opacity-50"
+        >
+          {saving ? 'Spašavanje...' : 'Sačuvaj Promjene'}
+        </button>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 max-w-2xl">
+        <h3 className="text-accent font-bold mb-4">Glavni naslov sekcije</h3>
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-white/50">Mali naslov iznad (Eyebrow)</label>
+          <input
+            type="text"
+            value={editedHeader.eyebrow || ''}
+            onChange={e => setEditedHeader({...editedHeader, eyebrow: e.target.value})}
+            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-accent focus:border-accent outline-none"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-white/50">Glavni naslov</label>
+          <textarea
+            value={editedHeader.title || ''}
+            onChange={e => setEditedHeader({...editedHeader, title: e.target.value})}
+            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-lg text-white focus:border-accent outline-none h-24"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-white/50">Opisni tekst</label>
+          <textarea
+            value={editedHeader.description || ''}
+            onChange={e => setEditedHeader({...editedHeader, description: e.target.value})}
+            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-sm text-white/70 focus:border-accent outline-none h-24"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {editedCards.map((card, index) => (
+          <div key={index} className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
+            <h3 className="text-accent font-bold mb-4">Parfem {index + 1}</h3>
+            
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">Slika parfema</label>
+              <div className="relative aspect-[3/4] bg-black/40 rounded-xl overflow-hidden group border border-white/10">
+                {card.url ? (
+                  <img src={card.url} alt="Carousel item" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <ImageIcon className="text-white/20" size={32} />
+                  </div>
+                )}
+                
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2">
+                    <Upload size={14} />
+                    {uploadingImageId === index ? 'Upload...' : 'Promijeni'}
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, index)}
+                      disabled={uploadingImageId === index}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest text-white/50">Oznaka (Badge)</label>
+                  <input
+                    type="text"
+                    value={card.accent || ''}
+                    onChange={e => handleCardChange(index, 'accent', e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-accent"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest text-white/50">Link (/product/ID)</label>
+                  <input
+                    type="text"
+                    value={card.link || ''}
+                    onChange={e => handleCardChange(index, 'link', e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/50"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-white/50">Naslov parfema</label>
+                <input
+                  type="text"
+                  value={card.title || ''}
+                  onChange={e => handleCardChange(index, 'title', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-white/50">Podnaslov</label>
+                <input
+                  type="text"
+                  value={card.subtitle || ''}
+                  onChange={e => handleCardChange(index, 'subtitle', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/70"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-white/50">Opis</label>
+                <textarea
+                  value={card.description || ''}
+                  onChange={e => handleCardChange(index, 'description', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/70 h-20"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-white/50">Note (Zarezom odvojene)</label>
+                <input
+                  type="text"
+                  value={card.notes || ''}
+                  onChange={e => handleCardChange(index, 'notes', e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/50"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

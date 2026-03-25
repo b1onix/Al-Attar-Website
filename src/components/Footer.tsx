@@ -1,8 +1,41 @@
 import { motion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Instagram, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export default function Footer() {
+  const [content, setContent] = useState({
+    brand_description: 'Ekskluzivna parfimerija posvećena kompozicijama koje ostavljaju prisustvo, ne buku.',
+    contact_email: 'hello@al-attar.ba',
+    contact_phone: '+387 61 234 567',
+    address: 'Tuzla, Bosna i Hercegovina',
+    instagram_url: 'https://instagram.com',
+    facebook_url: 'https://facebook.com',
+    tiktok_url: 'https://tiktok.com',
+    copyright_text: `© ${new Date().getFullYear()} Al-Attar. Sva prava zadržana.`
+  });
+
+  useEffect(() => {
+    async function fetchFooterContent() {
+      try {
+        const { data, error } = await supabase
+          .from('page_content')
+          .select('content')
+          .eq('id', 'footer_content')
+          .single();
+
+        if (!error && data?.content) {
+          setContent(data.content);
+        }
+      } catch (err) {
+        console.error('Error fetching footer content:', err);
+      }
+    }
+
+    fetchFooterContent();
+  }, []);
+
   return (
     <footer className="relative overflow-hidden border-t border-white/6 bg-black text-text px-4 sm:px-6 lg:px-8 pt-18 pb-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(197,160,89,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.05),transparent_22%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_30%,rgba(255,255,255,0.01))]" />
@@ -47,11 +80,11 @@ export default function Footer() {
                 <p className="text-[10px] uppercase tracking-[0.26em] text-text/42 mb-2">Baza</p>
                 <div className="inline-flex items-center gap-2 text-sm text-text/75">
                   <MapPin size={15} className="text-accent" />
-                  Tuzla
+                  {content.address.split(',')[0]}
                 </div>
               </div>
               <a
-                href="https://instagram.com"
+                href={content.instagram_url}
                 target="_blank"
                 rel="noreferrer"
                 className="group rounded-[1.25rem] border border-white/8 bg-white/[0.03] px-4 py-4 transition-colors hover:border-accent/30 hover:text-accent"
@@ -79,7 +112,7 @@ export default function Footer() {
               Mirisni potpisi za one koji vole tihu raskoš.
             </p>
             <p className="mt-5 max-w-sm text-sm leading-7 text-text/58 font-light">
-              Ekskluzivna parfimerija posvećena kompozicijama koje ostavljaju prisustvo, ne buku.
+              {content.brand_description}
             </p>
           </motion.div>
 
@@ -94,7 +127,9 @@ export default function Footer() {
           <ul className="space-y-4 text-sm font-light">
             <li><Link to="/shop" className="inline-flex items-center gap-2 hover:text-accent transition-colors">Kolekcija <ArrowRight size={14} /></Link></li>
             <li><Link to="/about" className="inline-flex items-center gap-2 hover:text-accent transition-colors">Naše Nasljeđe <ArrowRight size={14} /></Link></li>
-            <li><a href="https://instagram.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-accent transition-colors">Instagram <ArrowRight size={14} /></a></li>
+            <li><a href={content.instagram_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-accent transition-colors">Instagram <ArrowRight size={14} /></a></li>
+            <li><a href={content.facebook_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-accent transition-colors">Facebook <ArrowRight size={14} /></a></li>
+            <li><a href={content.tiktok_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-accent transition-colors">TikTok <ArrowRight size={14} /></a></li>
           </ul>
         </motion.div>
 
@@ -122,10 +157,10 @@ export default function Footer() {
         >
           <h4 className="uppercase tracking-[0.24em] text-[11px] mb-5 text-text/40">Kontakt</h4>
           <div className="space-y-4">
-            <p className="font-display text-[1.8rem] leading-none">Tuzla</p>
-            <p className="text-sm leading-7 text-text/58">Dizajnirano za spor ritam, profinjene note i digitalno iskustvo koje djeluje skupo.</p>
-            <a href="mailto:hello@al-attar.ba" className="inline-flex items-center gap-2 text-sm hover:text-accent transition-colors">
-              hello@al-attar.ba <ArrowUpRight size={14} />
+            <p className="font-display text-[1.8rem] leading-none">{content.address.split(',')[0]}</p>
+            <p className="text-sm leading-7 text-text/58">{content.contact_phone}</p>
+            <a href={`mailto:${content.contact_email}`} className="inline-flex items-center gap-2 text-sm hover:text-accent transition-colors">
+              {content.contact_email} <ArrowUpRight size={14} />
             </a>
           </div>
         </motion.div>
@@ -138,8 +173,8 @@ export default function Footer() {
           transition={{ duration: 1, delay: 0.6 }}
           className="mt-8 pt-6 border-t border-white/10 text-[11px] text-text/40 flex flex-col md:flex-row justify-between items-center gap-3"
         >
-          <p>&copy; {new Date().getFullYear()} Al-Attar. Sva prava zadržana.</p>
-          <p className="uppercase tracking-[0.24em] text-center">Tuzla, Bosna i Hercegovina</p>
+          <p>{content.copyright_text}</p>
+          <p className="uppercase tracking-[0.24em] text-center">{content.address}</p>
         </motion.div>
       </div>
     </footer>

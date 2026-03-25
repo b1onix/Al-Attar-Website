@@ -161,6 +161,7 @@ export default function Shop() {
                             transition={{ duration: 0.9, ease: [0.25, 0.46, 0.45, 0.94] }}
                             src={product.imageUrl}
                             alt={product.name}
+                            loading="lazy"
                             className={`w-full h-full object-cover ${product.stock <= 0 ? 'opacity-40 grayscale' : 'opacity-82 group-hover:opacity-100'}`}
                             referrerPolicy="no-referrer"
                           />

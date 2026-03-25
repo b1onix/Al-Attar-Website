@@ -1,10 +1,45 @@
 import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
 import PageWrapper from '../components/PageWrapper';
 import SplitText from '../components/SplitText';
 import { Mail, MapPin, Phone, Instagram, ArrowRight } from 'lucide-react';
 import MagneticButton from '../components/MagneticButton';
+import { supabase } from '../lib/supabase';
 
 export default function Contact() {
+  const [content, setContent] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      const { data, error } = await supabase
+        .from('page_content')
+        .select('content')
+        .eq('id', 'contact_content')
+        .single();
+      
+      if (!error && data) {
+        setContent(data.content);
+      }
+    };
+    fetchContent();
+  }, []);
+
+  const contactData = content || {
+    eyebrow: 'Korisnička Podrška',
+    title_1: 'Stupimo u',
+    title_2: 'Kontakt.',
+    description: 'Bilo da imate pitanje o našim mirisima, trebate pomoć pri odabiru savršenog parfema ili želite razgovarati o saradnji, tu smo za vas.',
+    address_label: 'Atelje & Sjedište',
+    address: 'Tuzla, Bosna i Hercegovina',
+    email_label: 'Email',
+    email: 'hello@al-attar.ba',
+    phone_label: 'Telefon',
+    phone: '+387 60 000 000',
+    form_title: 'Pošaljite nam poruku',
+    instagram_handle: '@al.attar',
+    instagram_url: 'https://instagram.com'
+  };
+
   return (
     <PageWrapper>
       <div className="min-h-screen bg-bg relative overflow-hidden">
@@ -20,21 +55,21 @@ export default function Contact() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             >
-              <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-8">Korisnička Podrška</p>
+              <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-8">{contactData.eyebrow}</p>
               
               <SplitText 
-                text="Stupimo u" 
+                text={contactData.title_1} 
                 className="font-display text-5xl md:text-7xl leading-[0.9] mb-2 justify-start" 
                 delay={0.1}
               />
               <SplitText 
-                text="Kontakt." 
+                text={contactData.title_2} 
                 className="font-display text-5xl md:text-7xl leading-[0.9] mb-12 justify-start text-white/50" 
                 delay={0.3}
               />
 
               <p className="text-lg font-light text-white/60 leading-relaxed mb-16 max-w-md">
-                Bilo da imate pitanje o našim mirisima, trebate pomoć pri odabiru savršenog parfema ili želite razgovarati o saradnji, tu smo za vas.
+                {contactData.description}
               </p>
 
               <div className="space-y-10">
@@ -43,8 +78,8 @@ export default function Contact() {
                     <MapPin size={20} className="text-white/60 group-hover:text-accent transition-colors" />
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">Atelje & Sjedište</p>
-                    <p className="text-lg text-white/90">Tuzla, Bosna i Hercegovina</p>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">{contactData.address_label}</p>
+                    <p className="text-lg text-white/90">{contactData.address}</p>
                   </div>
                 </div>
 
@@ -53,8 +88,8 @@ export default function Contact() {
                     <Mail size={20} className="text-white/60 group-hover:text-accent transition-colors" />
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">Email</p>
-                    <a href="mailto:hello@al-attar.ba" className="text-lg text-white/90 hover:text-accent transition-colors">hello@al-attar.ba</a>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">{contactData.email_label}</p>
+                    <a href={`mailto:${contactData.email}`} className="text-lg text-white/90 hover:text-accent transition-colors">{contactData.email}</a>
                   </div>
                 </div>
 
@@ -63,8 +98,8 @@ export default function Contact() {
                     <Phone size={20} className="text-white/60 group-hover:text-accent transition-colors" />
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">Telefon</p>
-                    <a href="tel:+38760000000" className="text-lg text-white/90 hover:text-accent transition-colors">+387 60 000 000</a>
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-2">{contactData.phone_label}</p>
+                    <a href={`tel:${contactData.phone.replace(/\s+/g, '')}`} className="text-lg text-white/90 hover:text-accent transition-colors">{contactData.phone}</a>
                   </div>
                 </div>
               </div>
@@ -77,7 +112,7 @@ export default function Contact() {
               transition={{ duration: 1, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="bg-white/[0.02] border border-white/5 rounded-[2.5rem] p-8 md:p-12 backdrop-blur-sm"
             >
-              <h3 className="font-display text-3xl mb-8">Pošaljite nam poruku</h3>
+              <h3 className="font-display text-3xl mb-8">{contactData.form_title}</h3>
               
               <form className="space-y-8" onSubmit={(e) => e.preventDefault()}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -135,8 +170,8 @@ export default function Contact() {
                 </div>
 
                 <div className="pt-4 flex items-center justify-between">
-                  <a href="https://instagram.com" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-white/40 hover:text-accent transition-colors text-sm uppercase tracking-widest">
-                    <Instagram size={18} /> @al.attar
+                  <a href={contactData.instagram_url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-white/40 hover:text-accent transition-colors text-sm uppercase tracking-widest">
+                    <Instagram size={18} /> {contactData.instagram_handle}
                   </a>
                   
                   <MagneticButton>

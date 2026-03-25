@@ -1,10 +1,28 @@
 import { motion, useScroll, useTransform } from 'motion/react';
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import PageWrapper from '../components/PageWrapper';
 import SplitText from '../components/SplitText';
+import { supabase } from '../lib/supabase';
 
 export default function About() {
   const containerRef = useRef(null);
+  const [content, setContent] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      const { data, error } = await supabase
+        .from('page_content')
+        .select('content')
+        .eq('id', 'about_content')
+        .single();
+      
+      if (!error && data) {
+        setContent(data.content);
+      }
+    };
+    fetchContent();
+  }, []);
+
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ['start start', 'end end']
@@ -13,6 +31,35 @@ export default function About() {
   const y1 = useTransform(scrollYProgress, [0, 1], ['0%', '20%']);
   const y2 = useTransform(scrollYProgress, [0, 1], ['0%', '-20%']);
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0.5]);
+
+  const hero = content?.hero || {
+    eyebrow: 'Naša Priča',
+    title_1: 'Umjetnost',
+    title_2: 'Parfimerije',
+    description: 'U srcu Tuzle, gdje se susreću istok i zapad, rođena je ideja o parfimeriji koja ne prati prolazne trendove, već stvara trajne uspomene kroz najfinije esencije.'
+  };
+
+  const story_1 = content?.story_1 || {
+    image_url: 'https://picsum.photos/seed/atelier-perfume/1000/1200?grayscale',
+    label: '01 / Filozofija',
+    title: 'Spori proces, apsolutna posvećenost detaljima.',
+    text_1: 'Svaki Al-Attar miris je rezultat stotina sati pažljivog miješanja, maceracije i sazrijevanja. Ne vjerujemo u masovnu produkciju. Vjerujemo u strpljenje potrebno da bi sirovine razvile svoj puni potencijal.',
+    text_2: 'Koristimo isključivo najfinije sirovine iz cijelog svijeta - od rijetkog ouda iz Kambodže, senzualnog mošusa, do najčišće ruže iz Taifa. Naš proces duboko poštuje viševjekovnu tradiciju orijentalne parfumerije.'
+  };
+
+  const story_2 = content?.story_2 || {
+    image_url: 'https://picsum.photos/seed/minimal-bottle/1000/1500?grayscale',
+    label: '02 / Estetika',
+    title: 'Dizajn koji prepušta glavnu riječ mirisu.',
+    text_1: 'Vjerujemo u snagu apsolutnog minimalizma. Naše bočice su lišene suvišnih ukrasa, teške i hladne na dodir, dizajnirane kao trezori koji čuvaju dragocjenu esenciju unutar njih.',
+    text_2: 'Fokus je isključivo na mirisu - nevidljivom, ali najmoćnijem dodatku koji nosite. Kad zatvorite oči, jedino što ostaje je karakter.'
+  };
+
+  const location = content?.location || {
+    label: 'Sjedište',
+    title: 'Tuzla, Bosna i Hercegovina',
+    description: 'Naš atelje se nalazi u srcu Tuzle, gdje pažljivo dizajniramo, miješamo i pakujemo svaki miris prije nego što krene na put do vas.'
+  };
 
   return (
     <PageWrapper>
@@ -31,16 +78,16 @@ export default function About() {
               transition={{ duration: 0.8 }}
               className="text-[10px] uppercase tracking-[0.4em] text-accent mb-8"
             >
-              Naša Priča
+              {hero.eyebrow}
             </motion.p>
             
             <SplitText 
-              text="Umjetnost" 
+              text={hero.title_1} 
               className="font-display text-6xl md:text-8xl lg:text-[8rem] leading-[0.9] mb-4 justify-center" 
               delay={0.1}
             />
             <SplitText 
-              text="Parfimerije" 
+              text={hero.title_2} 
               className="font-display text-6xl md:text-8xl lg:text-[8rem] leading-[0.9] mb-12 justify-center text-white/50" 
               delay={0.3}
             />
@@ -51,7 +98,7 @@ export default function About() {
               transition={{ duration: 0.8, delay: 0.6 }}
               className="text-lg md:text-xl font-light text-white/60 leading-relaxed max-w-2xl mx-auto"
             >
-              U srcu Tuzle, gdje se susreću istok i zapad, rođena je ideja o parfimeriji koja ne prati prolazne trendove, već stvara trajne uspomene kroz najfinije esencije.
+              {hero.description}
             </motion.p>
           </div>
         </section>
@@ -67,10 +114,11 @@ export default function About() {
               className="relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-white/5"
             >
               <img
-                src="https://picsum.photos/seed/atelier-perfume/1000/1200?grayscale"
+                src={story_1.image_url}
                 alt="Proces kreacije"
                 className="w-full h-full object-cover opacity-80"
                 referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-transparent opacity-80" />
             </motion.div>
@@ -82,14 +130,13 @@ export default function About() {
               transition={{ duration: 1, delay: 0.2 }}
               className="max-w-xl"
             >
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-6">01 / Filozofija</p>
-              <h2 className="font-display text-4xl md:text-5xl leading-tight mb-8">Spori proces, apsolutna posvećenost detaljima.</h2>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-6">{story_1.label}</p>
+              <h2 className="font-display text-4xl md:text-5xl leading-tight mb-8">{story_1.title}</h2>
               <p className="text-base text-white/60 leading-relaxed font-light mb-6">
-                Svaki Al-Attar miris je rezultat stotina sati pažljivog miješanja, maceracije i sazrijevanja. 
-                Ne vjerujemo u masovnu produkciju. Vjerujemo u strpljenje potrebno da bi sirovine razvile svoj puni potencijal.
+                {story_1.text_1}
               </p>
               <p className="text-base text-white/60 leading-relaxed font-light">
-                Koristimo isključivo najfinije sirovine iz cijelog svijeta - od rijetkog ouda iz Kambodže, senzualnog mošusa, do najčišće ruže iz Taifa. Naš proces duboko poštuje viševjekovnu tradiciju orijentalne parfumerije.
+                {story_1.text_2}
               </p>
             </motion.div>
           </div>
@@ -102,13 +149,13 @@ export default function About() {
               transition={{ duration: 1 }}
               className="max-w-xl order-2 lg:order-1"
             >
-              <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-6">02 / Estetika</p>
-              <h2 className="font-display text-4xl md:text-5xl leading-tight mb-8">Dizajn koji prepušta glavnu riječ mirisu.</h2>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/40 mb-6">{story_2.label}</p>
+              <h2 className="font-display text-4xl md:text-5xl leading-tight mb-8">{story_2.title}</h2>
               <p className="text-base text-white/60 leading-relaxed font-light mb-6">
-                Vjerujemo u snagu apsolutnog minimalizma. Naše bočice su lišene suvišnih ukrasa, teške i hladne na dodir, dizajnirane kao trezori koji čuvaju dragocjenu esenciju unutar njih.
+                {story_2.text_1}
               </p>
               <p className="text-base text-white/60 leading-relaxed font-light">
-                Fokus je isključivo na mirisu - nevidljivom, ali najmoćnijem dodatku koji nosite. Kad zatvorite oči, jedino što ostaje je karakter.
+                {story_2.text_2}
               </p>
             </motion.div>
 
@@ -121,10 +168,11 @@ export default function About() {
             >
               <motion.img
                 style={{ y: y2 }}
-                src="https://picsum.photos/seed/minimal-bottle/1000/1500?grayscale"
+                src={story_2.image_url}
                 alt="Minimalizam bočice"
                 className="w-full h-[120%] object-cover opacity-80"
                 referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-transparent opacity-80" />
             </motion.div>
@@ -134,10 +182,10 @@ export default function About() {
         {/* Location Footer */}
         <section className="border-t border-white/5 bg-white/[0.02]">
           <div className="max-w-7xl mx-auto px-6 py-24 md:py-32 text-center">
-            <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-6">Sjedište</p>
-            <h2 className="font-display text-3xl md:text-5xl text-white/90 mb-4">Tuzla, Bosna i Hercegovina</h2>
+            <p className="text-[10px] uppercase tracking-[0.4em] text-accent mb-6">{location.label}</p>
+            <h2 className="font-display text-3xl md:text-5xl text-white/90 mb-4">{location.title}</h2>
             <p className="text-white/40 font-light max-w-md mx-auto">
-              Naš atelje se nalazi u srcu Tuzle, gdje pažljivo dizajniramo, miješamo i pakujemo svaki miris prije nego što krene na put do vas.
+              {location.description}
             </p>
           </div>
         </section>

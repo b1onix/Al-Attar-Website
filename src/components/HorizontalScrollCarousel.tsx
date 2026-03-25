@@ -1,8 +1,10 @@
 import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
-const cards = [
+const defaultCards = [
   {
     id: 1,
     title: 'Crni Oud',
@@ -36,6 +38,45 @@ const cards = [
 ];
 
 export default function HorizontalScrollCarousel() {
+  const [cards, setCards] = useState(defaultCards);
+  const [header, setHeader] = useState({
+    eyebrow: 'Signature kolekcija',
+    title: 'Mirisi koji definišu karakter i ostavljaju neizbrisiv trag.',
+    description: 'Svaka kreacija je pažljivo balansirana da pruži jedinstveno iskustvo, od prvog dodira sa kožom do dugotrajnog traga.'
+  });
+
+  useEffect(() => {
+    async function fetchCarouselContent() {
+      try {
+        const { data, error } = await supabase
+          .from('page_content')
+          .select('*')
+          .in('id', ['carousel_header', 'carousel_cards']);
+
+        if (error) throw error;
+
+        if (data) {
+          const headerData = data.find(d => d.id === 'carousel_header');
+          if (headerData?.content) setHeader(headerData.content);
+
+          const cardsData = data.find(d => d.id === 'carousel_cards');
+          if (cardsData?.content && Array.isArray(cardsData.content)) {
+            // Map the generic data array to include ids for React keys
+            const mappedCards = cardsData.content.map((card: any, index: number) => ({
+              ...card,
+              id: index + 1
+            }));
+            setCards(mappedCards);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching carousel content:', err);
+      }
+    }
+
+    fetchCarouselContent();
+  }, []);
+
   return (
     <section className="relative px-4 md:px-8 py-[5.5rem] md:py-24 overflow-hidden transform-gpu">
       <div className="absolute inset-0 pointer-events-none">
@@ -48,21 +89,18 @@ export default function HorizontalScrollCarousel() {
 
       <div className="relative max-w-6xl mx-auto">
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] items-end mb-8 md:mb-10 will-change-transform">
-          <div className="max-w-md">
+          <div>
             <span className="inline-flex items-center gap-3 uppercase tracking-[0.28em] text-[10px] text-accent/80 mb-4">
               <span className="h-px w-8 bg-accent/50" />
-              Kolekcija ekskluziva
+              {header.eyebrow}
             </span>
-            <h2 className="font-display text-3xl md:text-5xl lg:text-[3.6rem] leading-[0.95]">
-              Tri mirisa predstavljena kao luksuzna selekcija, ne kao običan katalog.
+            <h2 className="font-display text-4xl md:text-[3.5rem] leading-[0.95]">
+              {header.title}
             </h2>
           </div>
-
-          <div className="lg:pl-10">
-            <p className="text-sm md:text-base leading-7 text-text/62 max-w-xl">
-              Umjesto generičnog horizontalnog slidera, ova sekcija sada radi kao urednički raspored:
-              jedan hero miris i dva prateća izbora sa jasnim karakterom, boljim proporcijama i mnogo
-              jačim vizuelnim identitetom.
+          <div className="lg:pl-8 lg:pb-2">
+            <p className="text-sm md:text-[15px] leading-7 text-text/60 max-w-md">
+              {header.description}
             </p>
             <Link
               to="/shop"
@@ -147,7 +185,7 @@ function FeatureCard({
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
-              {card.notes.map((note) => (
+              {(Array.isArray(card.notes) ? card.notes : card.notes.split(',').map(n => n.trim())).map((note) => (
                 <span
                   key={note}
                   className="rounded-full border border-white/12 bg-white/[0.05] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-text/72"

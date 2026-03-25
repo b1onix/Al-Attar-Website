@@ -10,8 +10,42 @@ import { supabase } from '../lib/supabase';
 export default function Home() {
   const [activeSlide, setActiveSlide] = useState(0);
   const [iconicScents, setIconicScents] = useState<any[]>([]);
+  const [heroSlides, setHeroSlides] = useState<any[]>([]);
+  const [narrativeContent, setNarrativeContent] = useState<any>(null);
+  const [atelierDetails, setAtelierDetails] = useState<any[]>([]);
+  const [scentJourney, setScentJourney] = useState<any[]>([]);
 
   useEffect(() => {
+    async function fetchLandingContent() {
+      try {
+        const [slidesRes, contentRes] = await Promise.all([
+          supabase.from('hero_slides').select('*').order('display_order', { ascending: true }),
+          supabase.from('page_content').select('*')
+        ]);
+
+        if (slidesRes.data && slidesRes.data.length > 0) {
+          setHeroSlides(slidesRes.data);
+        } else {
+          // Fallback to static if DB is empty
+          setHeroSlides(defaultHeroSlides);
+        }
+
+        if (contentRes.data) {
+          const contentMap: Record<string, any> = {};
+          contentRes.data.forEach(item => {
+            contentMap[item.id] = item.content;
+          });
+          
+          if (contentMap['narrative_header']) setNarrativeContent(contentMap['narrative_header']);
+          if (contentMap['atelier_details']) setAtelierDetails(contentMap['atelier_details']);
+          if (contentMap['scent_journey']) setScentJourney(contentMap['scent_journey']);
+        }
+      } catch (error) {
+        console.error('Error fetching landing content:', error);
+        setHeroSlides(defaultHeroSlides);
+      }
+    }
+
     async function fetchFeaturedProducts() {
       try {
         const { data, error } = await supabase
@@ -37,10 +71,12 @@ export default function Home() {
         console.error('Error fetching featured products:', err);
       }
     }
+
+    fetchLandingContent();
     fetchFeaturedProducts();
   }, []);
 
-  const heroSlides = [
+  const defaultHeroSlides = [
     {
       id: 1,
       eyebrow: 'Atelier collection',
@@ -79,7 +115,7 @@ export default function Home() {
     },
   ];
 
-  const atelierDetails = [
+  const defaultAtelierDetails = [
     {
       label: 'Kurirana kompozicija',
       title: 'Slojevi koji se razvijaju postepeno',
@@ -97,7 +133,7 @@ export default function Home() {
     },
   ];
 
-  const scentJourney = [
+  const defaultScentJourney = [
     {
       phase: 'Otvaranje',
       notes: 'Šafran, bergamot, suho voće',
@@ -115,15 +151,19 @@ export default function Home() {
     },
   ];
 
+  const currentAtelierDetails = atelierDetails.length > 0 ? atelierDetails : defaultAtelierDetails;
+  const currentScentJourney = scentJourney.length > 0 ? scentJourney : defaultScentJourney;
+
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setActiveSlide((current) => (current + 1) % heroSlides.length);
-    }, 5500);
+    if (!heroSlides || heroSlides.length === 0) return;
+    
+    const timer = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [heroSlides]);
 
-    return () => window.clearInterval(interval);
-  }, [heroSlides.length]);
-
-  const currentSlide = heroSlides[activeSlide];
+  const currentSlide = heroSlides.length > 0 ? heroSlides[activeSlide] : defaultHeroSlides[0];
 
   return (
     <PageWrapper>
@@ -133,13 +173,13 @@ export default function Home() {
           <div className="absolute inset-0 z-0 will-change-transform">
             {heroSlides.map((slide, index) => (
               <div
-                key={slide.id}
+                key={slide.id || index}
                 className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
                   activeSlide === index ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
                 }`}
               >
                 <img
-                  src={slide.image}
+                  src={slide.image_url || slide.image}
                   alt={slide.title}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
@@ -155,15 +195,15 @@ export default function Home() {
 
           <div className="relative z-10 h-full w-full">
             <div className="max-w-7xl mx-auto h-full px-4 md:px-8 pt-28 pb-8 md:pb-10">
-              <div className="grid h-full lg:grid-rows-[1fr_auto] gap-8">
-                <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 items-center">
+              <div className="flex flex-col justify-between h-full lg:grid lg:grid-rows-[1fr_auto] gap-8">
+                <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 items-center h-full">
                   <div className="max-w-4xl">
                     <div className="mb-6 flex items-center justify-between gap-4">
-                      <span className="inline-flex items-center gap-3 uppercase tracking-[0.34em] text-[10px] text-accent/85">
-                        <span className="h-px w-10 bg-accent/60" />
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-accent flex items-center gap-3">
+                        <span className="w-8 h-px bg-accent/50" />
                         {currentSlide.eyebrow}
-                      </span>
-                      <span className="hidden md:block text-[10px] uppercase tracking-[0.34em] text-text/35">{`0${currentSlide.id} / 03`}</span>
+                      </p>
+                      <span className="hidden md:block text-[10px] uppercase tracking-[0.34em] text-text/35">{`0${activeSlide + 1} / 0${heroSlides.length}`}</span>
                     </div>
 
                   <AnimatePresence mode="wait">
@@ -174,13 +214,10 @@ export default function Home() {
                       exit={{ opacity: 0, y: -18 }}
                       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                     >
-                      <p className="font-display text-[3.4rem] leading-[0.9] md:text-[5.2rem] lg:text-[6.4rem] text-white max-w-4xl">
-                        Al-Attar
-                      </p>
-                      <h1 className="font-display text-[2.2rem] md:text-[3.6rem] lg:text-[4.5rem] leading-[0.93] text-white/92 max-w-4xl mt-3">
+                      <h1 className="font-display text-[2.8rem] leading-[1.05] tracking-tight md:text-[4.2rem] lg:text-[5.5rem] mb-6 md:mb-8 text-white drop-shadow-2xl">
                         {currentSlide.title}
                       </h1>
-                      <p className="mt-6 text-sm md:text-lg text-text/72 font-light leading-7 md:leading-8 max-w-xl">
+                      <p className="text-sm md:text-base leading-relaxed text-white/80 max-w-xl mb-8 md:mb-12 font-light tracking-wide drop-shadow-md">
                         {currentSlide.description}
                       </p>
 
@@ -221,15 +258,15 @@ export default function Home() {
                       >
                         <div className="flex items-start justify-between gap-4 mb-12">
                           <div>
-                            <p className="text-[10px] uppercase tracking-[0.26em] text-text/45 mb-3">{currentSlide.statLabel}</p>
-                            <p className="font-display text-3xl text-white">{currentSlide.statValue}</p>
+                            <p className="text-[10px] uppercase tracking-[0.26em] text-text/45 mb-3">{currentSlide.stat_label || currentSlide.statLabel}</p>
+                            <p className="font-display text-3xl text-white">{currentSlide.stat_value || currentSlide.statValue}</p>
                           </div>
-                          <span className="font-display text-5xl text-white/12">{`0${currentSlide.id}`}</span>
+                          <span className="font-display text-5xl text-white/12">{`0${activeSlide + 1}`}</span>
                         </div>
 
                         <div>
-                          <p className="text-[10px] uppercase tracking-[0.28em] text-accent mb-3">{currentSlide.cardTitle}</p>
-                          <p className="text-sm leading-7 text-text/65 max-w-md">{currentSlide.cardCopy}</p>
+                          <p className="text-[10px] uppercase tracking-[0.28em] text-accent mb-3">{currentSlide.card_title || currentSlide.cardTitle}</p>
+                          <p className="text-sm leading-7 text-text/65 max-w-md">{currentSlide.card_copy || currentSlide.cardCopy}</p>
                           <div className="mt-5 flex flex-wrap gap-2">
                             {currentSlide.notes.map((note, idx) => (
                               <span
@@ -246,41 +283,41 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="rounded-[1.7rem] border border-white/10 bg-black/40 overflow-hidden">
-                  <div className="grid gap-4 px-4 py-4 md:px-5 md:py-5 lg:grid-cols-[1.05fr_1.15fr_auto] lg:items-center">
-                    <div className="min-w-0">
+                <div className="rounded-[1.7rem] border border-white/10 bg-black/40 overflow-hidden shrink-0 mt-auto">
+                  <div className="flex flex-col lg:flex-row gap-4 px-4 py-4 md:px-5 md:py-5 lg:items-center">
+                    <div className="min-w-0 pr-4 flex-1">
                       <p className="text-[10px] uppercase tracking-[0.26em] text-text/42 mb-2">Trenutni kadar</p>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="font-display text-2xl md:text-[2rem] text-white truncate">{currentSlide.cardTitle}</p>
-                          <p className="text-sm text-text/55 truncate">{currentSlide.statValue}</p>
+                      <div className="flex items-center gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display text-2xl md:text-[2rem] text-white truncate leading-tight mb-1">{currentSlide.card_title || currentSlide.cardTitle}</p>
+                          <p className="text-[13px] text-text/55 truncate">{currentSlide.stat_value || currentSlide.statValue}</p>
                         </div>
-                        <span className="text-[10px] uppercase tracking-[0.28em] text-text/35">{`0${currentSlide.id}`}</span>
+                        <span className="text-[10px] uppercase tracking-[0.28em] text-text/35 ml-auto flex-shrink-0">{`0${activeSlide + 1}`}</span>
                       </div>
                     </div>
 
-                    <div className="hidden md:grid gap-2 md:grid-cols-3">
+                    <div className="hidden lg:flex gap-2 min-w-0 flex-shrink-0">
                       {heroSlides.map((slide, index) => (
                         <button
                           key={slide.id}
                           type="button"
                           onClick={() => setActiveSlide(index)}
-                          className={`group rounded-[1.1rem] border px-3 py-3 text-left transition-all duration-400 ${
+                          className={`group rounded-[1.1rem] border px-4 py-3 text-left transition-all duration-400 w-[140px] max-w-[140px] flex-shrink-0 ${
                             activeSlide === index
                               ? 'border-accent/45 bg-accent/10'
                               : 'border-white/8 bg-white/[0.02] hover:border-white/18 hover:bg-white/[0.04]'
                           }`}
                           aria-label={`Go to slide ${index + 1}`}
                         >
-                          <p className="text-[10px] uppercase tracking-[0.26em] text-text/45 mb-2">{`0${slide.id}`}</p>
-                          <p className={`font-display text-lg leading-none transition-colors ${activeSlide === index ? 'text-white' : 'text-text/72 group-hover:text-white'}`}>
-                            {slide.statValue}
+                          <p className="text-[9px] uppercase tracking-[0.26em] text-text/45 mb-1">{`0${index + 1}`}</p>
+                          <p className={`font-display text-[15px] leading-tight truncate transition-colors ${activeSlide === index ? 'text-white' : 'text-text/72 group-hover:text-white'}`}>
+                            {slide.stat_value || slide.statValue}
                           </p>
                         </button>
                       ))}
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 lg:justify-end">
+                    <div className="flex items-center justify-between gap-4 lg:justify-end flex-shrink-0 lg:pl-2">
                       <div className="flex items-center gap-2 md:hidden">
                         {heroSlides.map((slide, index) => (
                           <button
@@ -347,15 +384,13 @@ export default function Home() {
                   >
                     <span className="inline-flex items-center gap-3 uppercase tracking-[0.34em] text-[10px] text-accent/80 mb-6">
                       <span className="h-px w-10 bg-accent/50" />
-                      Mirisna kompozicija
+                      {narrativeContent?.eyebrow || "Mirisna kompozicija"}
                     </span>
                     <h2 className="font-display text-4xl md:text-6xl lg:text-[4.7rem] font-light leading-[0.92] max-w-3xl">
-                      Parfem koji ne izgleda kao sekcija, nego kao scena.
+                      {narrativeContent?.title || "Parfem koji ne izgleda kao sekcija, nego kao scena."}
                     </h2>
                     <p className="mt-7 text-sm md:text-lg text-text/62 font-light leading-7 md:leading-8 max-w-xl">
-                      Umjesto generičnog rasporeda sa nekoliko kartica, ovaj kadar sada radi kao editorial spread:
-                      jaka headline tipografija, različiti moduli, kontrolisan negativni prostor i slojevi koji se
-                      otkrivaju kao miris na koži.
+                      {narrativeContent?.description || "Umjesto generičnog rasporeda sa nekoliko kartica, ovaj kadar sada radi kao editorial spread: jaka headline tipografija, različiti moduli, kontrolisan negativni prostor i slojevi koji se otkrivaju kao miris na koži."}
                     </p>
                   </motion.div>
 
@@ -370,17 +405,17 @@ export default function Home() {
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(197,160,89,0.14),transparent_38%)]" />
                       <div className="relative flex h-full flex-col justify-between">
                         <div>
-                          <p className="text-[10px] uppercase tracking-[0.3em] text-accent/75 mb-5">{atelierDetails[0].label}</p>
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-accent/75 mb-5">{currentAtelierDetails[0].label}</p>
                           <h3 className="font-display text-[2.2rem] leading-[0.95] max-w-sm mb-4">
-                            {atelierDetails[0].title}
+                            {currentAtelierDetails[0].title}
                           </h3>
                         </div>
-                        <p className="text-[14px] leading-7 text-text/58 max-w-sm">{atelierDetails[0].description}</p>
+                        <p className="text-[14px] leading-7 text-text/58 max-w-sm">{currentAtelierDetails[0].description}</p>
                       </div>
                     </motion.div>
 
                     <div className="grid gap-4">
-                      {atelierDetails.slice(1).map((item, index) => (
+                      {currentAtelierDetails.slice(1).map((item, index) => (
                         <motion.div
                           key={item.title}
                           initial={{ opacity: 0, y: 28 }}
@@ -426,7 +461,7 @@ export default function Home() {
                     </p>
 
                     <div className="relative h-full flex flex-col justify-center gap-5 md:block">
-                      {scentJourney.map((step, index) => (
+                      {currentScentJourney.map((step, index) => (
                         <motion.div
                           key={step.phase}
                           initial={{ opacity: 0, x: index % 2 === 0 ? 50 : -50, y: 30 }}
@@ -521,6 +556,7 @@ export default function Home() {
                         <img 
                           src={item.img} 
                           alt={item.name}
+                          loading="lazy"
                           className="w-full h-full object-cover opacity-72 group-hover:scale-105 group-hover:opacity-100 transition-all duration-700"
                           referrerPolicy="no-referrer"
                         />

@@ -74,6 +74,32 @@ export default function Checkout() {
 
       if (itemsError) throw itemsError;
 
+      // 3. Send Email Notification to Admin via FormSubmit
+      try {
+        const orderDetailsText = cart.map(item => `${item.quantity}x ${item.name} (${(item.price * item.quantity).toFixed(2)} KM)`).join('\n');
+        
+        await fetch('https://formsubmit.co/ajax/alattarperfumes2025@gmail.com', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            _subject: `Nova Narudžba #${orderData.id.slice(0, 8)} - ${formData.name}`,
+            Ime: formData.name,
+            Email: formData.email,
+            Telefon: formData.phone,
+            Adresa: `${formData.address}, ${formData.city}`,
+            Ukupno: `${total.toFixed(2)} KM`,
+            Naručeni_Artikli: orderDetailsText,
+            _template: 'table' // Gives a nice table layout in the email
+          })
+        });
+      } catch (emailError) {
+        console.error('Email sending failed, but order was saved:', emailError);
+        // We don't throw here so the user still sees the success screen
+      }
+
       // Success
       setOrderId(orderData.id);
       setIsSuccess(true);

@@ -97,6 +97,8 @@ export default function ProductDetails() {
               <img
                 src={product.imageUrl}
                 alt={product.name}
+                loading="eager"
+                fetchPriority="high"
                 className="w-full h-full object-cover opacity-80"
                 referrerPolicy="no-referrer"
               />
